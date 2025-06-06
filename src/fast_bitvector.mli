@@ -50,21 +50,25 @@ module type Ops := sig
     (** [union ~result x y] returns bitwise or of [x] and [y], on bits allocated
         in [result]. *)
   end
+
+  (* In [With_int], the least significant bit is take to be at the index [bit0_at]. *)
+  module With_int : sig
+    val or_ : (t -> bit0_at:int -> int -> t) with_result
+    (** or with the int at [bit0_at] offset, excess bits in the int are ignored. *)
+  end
 end
 
 module Unsafe : Ops
 include Ops
 
-(* Bit 0 first *)
-module Big_endian : sig
+module Bit_zero_first : sig
   type nonrec t = t [@@deriving sexp]
 
   val to_string : t -> string
   val of_string : string -> t
 end
 
-(* Bit 0 last *)
-module Little_endian : sig
+module Bit_zero_last : sig
   type nonrec t = t [@@deriving sexp]
 
   val to_string : t -> string
@@ -81,17 +85,13 @@ val append : t -> t -> t
 (** Append one bitvector to another. *)
 
 val extend : by:int -> t -> t
-(** Append an empty bitvector of size [by]. *)
+(** Append an all-zero bitvector of size [by]. *)
 
-val extend_inplace : by:int -> t -> t
-(** Resize bitvector to accomodate [by] bits, or allocate bigger bitvector like
-    [extend]. New bits may have random values. Invalidates input vector. *)
-
-val fold : init:'a -> f:('a -> bool -> 'a) -> t -> 'a
+val fold : t -> init:'a -> f:('a -> bool -> 'a) -> 'a
 (** [fold ~init ~f b0...bn] is [f (f (f init b0)...) bn], where [b0...bn] are
     individual bits in a bitvector. *)
 
-val foldi : init:'a -> f:('a -> int -> bool -> 'a) -> t -> 'a
+val foldi : t -> init:'a -> f:('a -> int -> bool -> 'a) -> 'a
 (** [foldi] is [fold] with offset provided. *)
 
 val map : t -> f:(bool -> bool) -> t
@@ -116,10 +116,10 @@ val is_empty : t -> bool
 val is_full : t -> bool
 (** Return whenever all bits are one. *)
 
-val iter : f:(bool -> unit) -> t -> unit
+val iter : t -> f:(bool -> unit) -> unit
 (** Iterate over all bits. *)
 
-val iteri : f:(int -> bool -> unit) -> t -> unit
+val iteri : t -> f:(int -> bool -> unit) -> unit
 (** Iterate over all bits and their offsets. *)
 
 val of_iter : ((bool -> unit) -> unit) -> t
@@ -130,3 +130,22 @@ val to_seq : t -> bool Seq.t
 
 val of_seq : bool Seq.t -> t
 (** Convert a sequence into a bitvector. *)
+
+
+module Builder : sig
+  type t' := t
+
+  type t 
+
+  val create : unit -> t
+  (** Create a new bitvector builder. *)
+
+  val push : t -> bool -> unit
+  (** Add a single bit to the bitvector (at the highest index). *)
+
+  val to_bitvector : t -> t'
+  (** Convert the builder to a bitvector. O(n). *)
+
+  val reset : t -> unit
+  (** Reset the builder, clearing all stored data *)
+end
